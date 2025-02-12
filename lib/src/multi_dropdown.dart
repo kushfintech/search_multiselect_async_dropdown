@@ -245,6 +245,8 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
   final GlobalKey<FormFieldState<List<DropdownItem<T>>?>> _formFieldKey =
       GlobalKey();
 
+  String _lastSearchQuery = "";
+
   @override
   void initState() {
     super.initState();
@@ -330,7 +332,10 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       _dropdownController._clearSearchQuery();
       _portalController.hide();
     }
-    if (widget.searchEnabled) {
+    // 🔥 Only fetch data if the search query has changed
+    if (widget.searchEnabled &&
+        _dropdownController._searchQuery != _lastSearchQuery) {
+      _lastSearchQuery = _dropdownController._searchQuery;
       _handleFuture(_dropdownController._searchQuery);
     }
   }
