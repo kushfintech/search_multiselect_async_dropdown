@@ -608,14 +608,16 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
     }
 
     if (chipDecoration.wrap) {
-      return Wrap(
-        spacing: chipDecoration.spacing,
-        runSpacing: chipDecoration.runSpacing,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children:
-            selectedOptions
-                .map((option) => _buildChip(option, chipDecoration))
-                .toList(),
+      return SingleChildScrollView(
+        child: Wrap(
+          spacing: chipDecoration.spacing,
+          runSpacing: chipDecoration.runSpacing,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children:
+              selectedOptions
+                  .map((option) => _buildChip(option, chipDecoration))
+                  .toList(),
+        ),
       );
     }
 
@@ -650,7 +652,14 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(option.label, style: chipDecoration.labelStyle),
+          Expanded(
+            child: Text(
+              option.label,
+              style: chipDecoration.labelStyle,
+
+              overflow: TextOverflow.clip,
+            ),
+          ),
           const SizedBox(width: 4),
           InkWell(
             onTap: () {
