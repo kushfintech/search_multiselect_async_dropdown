@@ -5,20 +5,25 @@ part of '../multi_dropdown.dart';
 class _Dropdown<T> extends StatelessWidget {
   /// Creates a dropdown widget.
   const _Dropdown({
+    required this.searchController,
     required this.decoration,
     required this.width,
     required this.searchEnabled,
     required this.dropdownItemDecoration,
     required this.searchDecoration,
     required this.maxSelections,
+    required this.minSelections,
     required this.items,
     required this.onItemTap,
-    Key? key,
+    super.key,
     this.onSearchChange,
     this.itemBuilder,
     this.itemSeparator,
     this.singleSelect = false,
-  }) : super(key: key);
+  });
+
+  /// Search controller for the search field.
+  final TextEditingController searchController;
 
   /// The decoration of the dropdown.
   final DropdownDecoration decoration;
@@ -44,6 +49,9 @@ class _Dropdown<T> extends StatelessWidget {
   /// The maximum number of selections allowed.
   final int maxSelections;
 
+  /// The minimum number of selections allowed.
+  final int minSelections;
+
   /// The list of dropdown items.
   final List<DropdownItem<T>> items;
 
@@ -60,11 +68,13 @@ class _Dropdown<T> extends StatelessWidget {
 
   static const Map<ShortcutActivator, Intent> _webShortcuts =
       <ShortcutActivator, Intent>{
-    SingleActivator(LogicalKeyboardKey.arrowDown):
-        DirectionalFocusIntent(TraversalDirection.down),
-    SingleActivator(LogicalKeyboardKey.arrowUp):
-        DirectionalFocusIntent(TraversalDirection.up),
-  };
+        SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(
+          TraversalDirection.down,
+        ),
+        SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(
+          TraversalDirection.up,
+        ),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +105,7 @@ class _Dropdown<T> extends StatelessWidget {
             children: [
               if (searchEnabled)
                 _SearchField(
+                  controller: searchController,
                   decoration: searchDecoration,
                   onChanged: _onSearchChange,
                 ),
@@ -102,8 +113,8 @@ class _Dropdown<T> extends StatelessWidget {
                 Flexible(child: decoration.header!),
               Flexible(
                 child: ListView.separated(
-                  separatorBuilder: (_, __) =>
-                      itemSeparator ?? const SizedBox.shrink(),
+                  separatorBuilder:
+                      (_, __) => itemSeparator ?? const SizedBox.shrink(),
                   shrinkWrap: true,
                   itemCount: items.length,
                   itemBuilder: (_, int index) => _buildOption(index, theme),
@@ -140,18 +151,21 @@ class _Dropdown<T> extends StatelessWidget {
       return itemBuilder!(option, index, () => onItemTap(option));
     }
 
-    final disabledColor = dropdownItemDecoration.disabledBackgroundColor ??
+    final disabledColor =
+        dropdownItemDecoration.disabledBackgroundColor ??
         dropdownItemDecoration.backgroundColor?.withAlpha(100);
 
-    final tileColor = option.disabled
-        ? disabledColor
-        : option.selected
+    final tileColor =
+        option.disabled
+            ? disabledColor
+            : option.selected
             ? dropdownItemDecoration.selectedBackgroundColor
             : dropdownItemDecoration.backgroundColor;
 
-    final trailing = option.disabled
-        ? dropdownItemDecoration.disabledIcon
-        : option.selected
+    final trailing =
+        option.disabled
+            ? dropdownItemDecoration.disabledIcon
+            : option.selected
             ? dropdownItemDecoration.selectedIcon
             : null;
 
@@ -165,15 +179,22 @@ class _Dropdown<T> extends StatelessWidget {
         selected: option.selected,
         visualDensity: VisualDensity.adaptivePlatformDensity,
         focusColor: dropdownItemDecoration.backgroundColor?.withAlpha(100),
-        selectedColor: dropdownItemDecoration.selectedTextColor ??
+        selectedColor:
+            dropdownItemDecoration.selectedTextColor ??
             theme.colorScheme.onSurface,
         textColor:
             dropdownItemDecoration.textColor ?? theme.colorScheme.onSurface,
         tileColor: tileColor ?? Colors.transparent,
-        selectedTileColor: dropdownItemDecoration.selectedBackgroundColor ??
+        selectedTileColor:
+            dropdownItemDecoration.selectedBackgroundColor ??
             Colors.grey.shade200,
         onTap: () {
+          print('onItemTap');
           if (option.disabled) return;
+
+          if (_reachedMinSelection(option)) {
+            return;
+          }
 
           if (singleSelect || !_reachedMaxSelection(option)) {
             onItemTap(option);
@@ -191,31 +212,53 @@ class _Dropdown<T> extends StatelessWidget {
         maxSelections > 0 &&
         _selectedCount >= maxSelections;
   }
+
+  bool _reachedMinSelection(DropdownItem<dynamic> option) {
+    return option.selected && _selectedCount == minSelections;
+  }
 }
 
-class _SearchField extends StatelessWidget {
+class _SearchField extends StatefulWidget {
   const _SearchField({
     required this.decoration,
     required this.onChanged,
+    required this.controller,
   });
 
   final SearchFieldDecoration decoration;
 
   final ValueChanged<String> onChanged;
 
+  final TextEditingController controller;
+
+  @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  // Throttle on change 100 miliseconds after stops typing
+  // Timer? _debounce;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(8),
-      child: TextField(
+      child: TextFormField(
+        controller: widget.controller,
+        autofocus: widget.decoration.autofocus,
         decoration: InputDecoration(
           isDense: true,
-          hintText: decoration.hintText,
-          border: decoration.border,
-          focusedBorder: decoration.focusedBorder,
-          suffixIcon: decoration.searchIcon,
+          hintText: widget.decoration.hintText,
+          border: widget.decoration.border,
+          focusedBorder: widget.decoration.focusedBorder,
+          suffixIcon: widget.decoration.searchIcon,
         ),
-        onChanged: onChanged,
+        // onChanged: (value) {
+        //   if (_debounce?.isActive ?? false) _debounce!.cancel();
+        //   _debounce = Timer(widget.decoration.debounceDuration, () {
+        //     widget.onChanged(value);
+        //   });
+        // },
       ),
     );
   }

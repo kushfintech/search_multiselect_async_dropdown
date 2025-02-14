@@ -12,6 +12,7 @@ class SearchFieldDecoration {
   ///
   /// [searchIcon] is the icon to display in the search field. The default value is Icon(Icons.search).
   const SearchFieldDecoration({
+    this.autofocus = true,
     this.hintText = 'Search',
     this.border = const OutlineInputBorder(
       borderSide: BorderSide(color: Color(0xFFE0E0E0)),
@@ -22,6 +23,7 @@ class SearchFieldDecoration {
       borderRadius: BorderRadius.all(Radius.circular(12)),
     ),
     this.searchIcon = const Icon(Icons.search),
+    this.debounceDuration = const Duration(milliseconds: 300),
   });
 
   /// The hint text to display in the search field.
@@ -29,6 +31,12 @@ class SearchFieldDecoration {
 
   /// The border of the search field.
   final InputBorder? border;
+
+  /// The border of the search field.
+  final bool autofocus;
+
+  /// Debounce duration for search
+  final Duration debounceDuration;
 
   /// The border of the search field when it is focused.
   final InputBorder? focusedBorder;

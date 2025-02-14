@@ -103,6 +103,8 @@ class MultiDropdown<T extends Object> extends StatefulWidget {
     this.onSelectionChange,
     this.onSearchChange,
     this.closeOnBackButton = false,
+    this.minSelections = 0,
+    this.initallySelectedItems = const [],
     super.key,
   }) : future = null;
 
@@ -149,8 +151,10 @@ class MultiDropdown<T extends Object> extends StatefulWidget {
     this.focusNode,
     this.onSelectionChange,
     this.onSearchChange,
+    this.minSelections = 0,
     this.closeOnBackButton = false,
     super.key,
+    this.initallySelectedItems = const [],
   }) : items = const [];
 
   /// The list of dropdown items.
@@ -195,6 +199,9 @@ class MultiDropdown<T extends Object> extends StatefulWidget {
   /// The maximum number of selections allowed.
   final int maxSelections;
 
+  /// The minimum number of selections allowed.
+  final int minSelections;
+
   /// Whether the dropdown is enabled.
   final bool enabled;
 
@@ -220,6 +227,8 @@ class MultiDropdown<T extends Object> extends StatefulWidget {
   ///
   /// Note: This option requires the app to have a router, such as MaterialApp.router, in order to work properly.
   final bool closeOnBackButton;
+
+  final List<DropdownItem<T>> initallySelectedItems;
 
   @override
   State<MultiDropdown<T>> createState() => _MultiDropdownState<T>();
@@ -247,10 +256,46 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
 
   String _lastSearchQuery = "";
 
+  final TextEditingController _searchController = TextEditingController();
+
+  Timer? _debounce;
+
   @override
   void initState() {
     super.initState();
     _initializeController();
+    if (widget.initallySelectedItems.isNotEmpty) {
+      _handleInitallySelectedItems();
+    }
+    _listenForSearch();
+  }
+
+  _listenForSearch() {
+    _searchController.addListener(() {
+      _dropdownController._setSearchQuery(_searchController.text);
+
+      // 🔥 Only fetch data if the search query has changed
+      if (widget.searchEnabled &&
+          _dropdownController._searchQuery != _lastSearchQuery &&
+          _dropdownController.isOpen) {
+        _lastSearchQuery = _dropdownController._searchQuery;
+
+        if (_debounce?.isActive ?? false) _debounce!.cancel();
+        _debounce = Timer(Duration(milliseconds: 300), () {
+          _handleFuture(_dropdownController._searchQuery);
+        });
+      }
+    });
+  }
+
+  void _handleInitallySelectedItems() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _dropdownController.selectWhere((element) {
+        return widget.initallySelectedItems.any(
+          (e) => e.value == element.value,
+        );
+      });
+    });
   }
 
   Future<void> _initializeController() async {
@@ -332,12 +377,6 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       _dropdownController._clearSearchQuery();
       _portalController.hide();
     }
-    // 🔥 Only fetch data if the search query has changed
-    if (widget.searchEnabled &&
-        _dropdownController._searchQuery != _lastSearchQuery) {
-      _lastSearchQuery = _dropdownController._searchQuery;
-      _handleFuture(_dropdownController._searchQuery);
-    }
   }
 
   @override
@@ -352,10 +391,6 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       _dropdownController = widget.controller ?? MultiSelectController<T>();
 
       _initializeController();
-      // // 🔥 If future function changes, re-fetch data
-      // if (widget.future != oldWidget.future) {
-      //   _handleFuture(""); // Re-fetch with empty query
-      // }
     }
 
     // if the focus node is changed, then dispose the old focus node
@@ -370,6 +405,8 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
     _dropdownController.removeListener(_controllerListener);
 
     if (widget.controller == null) {
@@ -435,6 +472,7 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
                           : Offset(0, widget.dropdownDecoration.marginTop),
                   child: RepaintBoundary(
                     child: _Dropdown<T>(
+                      searchController: _searchController,
                       decoration: widget.dropdownDecoration,
                       onItemTap: _handleDropdownItemTap,
                       width: renderBoxSize.width,
@@ -445,6 +483,7 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
                       itemSeparator: widget.itemSeparator,
                       searchDecoration: widget.searchDecoration,
                       maxSelections: widget.maxSelections,
+                      minSelections: widget.minSelections,
                       singleSelect: widget.singleSelect,
                       onSearchChange: _dropdownController._setSearchQuery,
                     ),
