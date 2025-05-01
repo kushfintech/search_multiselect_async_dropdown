@@ -356,6 +356,7 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
 
     try {
       _loadingController.start();
+
       final items = await widget.future!(query);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadingController.stop();
@@ -476,7 +477,7 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
                       decoration: widget.dropdownDecoration,
                       onItemTap: _handleDropdownItemTap,
                       width: renderBoxSize.width,
-                      items: _dropdownController.items,
+                      items: _dropdownController.items.toList(),
                       searchEnabled: widget.searchEnabled,
                       dropdownItemDecoration: widget.dropdownItemDecoration,
                       itemBuilder: widget.itemBuilder,
