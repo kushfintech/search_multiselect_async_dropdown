@@ -33,17 +33,24 @@ class MultiSelectController<T> extends ChangeNotifier {
   }
 
   void setItems(List<DropdownItem<T>> newItems) {
+    // Preserve selection and disabled state from old list
+    // Collect the values of previously selected and disabled items from _allList.
     final selectedValues =
         _allList.where((e) => e.selected).map((e) => e.value).toSet();
     final disabledValues =
         _allList.where((e) => e.disabled).map((e) => e.value).toSet();
 
-    // Map existing items for quick lookup
+    //  Map old items by value for lookup
+    //Create a map from value to item for fast access later (helps find missing selected items).
+    // This is useful for ensuring that selected items that are not in the new list
     final Map<T, DropdownItem<T>> existingMap = {
       for (var item in _allList) item.value: item,
     };
 
-    // Merge logic
+    // Update _allList using new items
+    //Replace _allList with a new list based on newItems.
+    //Keep selected and disabled flags if the item's value is in selectedValues or disabledValues.
+
     _allList =
         newItems.map((newItem) {
           return newItem.copyWith(
@@ -52,7 +59,13 @@ class MultiSelectController<T> extends ChangeNotifier {
           );
         }).toList();
 
+    //Sort list with selected items first
+    //Update _items to a version of _allList with selected items sorted first.
     _items = _sortSelectedFirst(_allList);
+
+    // Filter list based on search query
+    //If there's no search query, _filteredItems is the same as _items.
+    //If there is a query, it filters and sorts _allList based on the query.
     _filteredItems =
         _searchQuery.isEmpty
             ? _sortSelectedFirst(_items)
@@ -67,6 +80,8 @@ class MultiSelectController<T> extends ChangeNotifier {
             );
 
     // Ensure selected items not in newItems stay in the list
+    //Add back any selected items that were not in newItems
+    //If a previously selected item was not included in newItems, add it back to _allList to preserve its selection.
     final selectedMissingItems =
         existingMap.entries
             .where(
@@ -80,6 +95,8 @@ class MultiSelectController<T> extends ChangeNotifier {
     _allList.addAll(selectedMissingItems);
     _items = _sortSelectedFirst(_allList);
 
+    //Update filtered items with missing selected items if search is active
+    //If search is active, ensure those "missing but selected" items also appear in the filtered list.
     if (_searchQuery.isNotEmpty) {
       _filteredItems.addAll(
         selectedMissingItems.where((item) => !_filteredItems.contains(item)),
