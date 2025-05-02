@@ -277,7 +277,8 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       // 🔥 Only fetch data if the search query has changed
       if (widget.searchEnabled &&
           _dropdownController._searchQuery != _lastSearchQuery &&
-          _dropdownController.isOpen) {
+          _dropdownController.isOpen &&
+          widget.future != null) {
         _lastSearchQuery = _dropdownController._searchQuery;
 
         if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -302,8 +303,9 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
     if (_dropdownController.isDisposed) {
       throw StateError('DropdownController is disposed');
     }
-
-    unawaited(_handleFuture(_dropdownController._searchQuery));
+    if (widget.future != null) {
+      unawaited(_handleFuture(_dropdownController._searchQuery));
+    }
 
     if (!_dropdownController._initialized) {
       _dropdownController
@@ -353,9 +355,11 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
   Future<void> _handleFuture(String query) async {
     // we need to wait for the future to complete
     // before we can set the items to the dropdown controller.
+    if (widget.future == null) return;
 
     try {
       _loadingController.start();
+
       final items = await widget.future!(query);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadingController.stop();
@@ -476,7 +480,7 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
                       decoration: widget.dropdownDecoration,
                       onItemTap: _handleDropdownItemTap,
                       width: renderBoxSize.width,
-                      items: _dropdownController.items,
+                      items: _dropdownController.items.toList(),
                       searchEnabled: widget.searchEnabled,
                       dropdownItemDecoration: widget.dropdownItemDecoration,
                       itemBuilder: widget.itemBuilder,
@@ -691,13 +695,12 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Text(
-              option.label,
-              style: chipDecoration.labelStyle,
-
-              overflow: TextOverflow.clip,
-            ),
+          Text(
+            option.label,
+            style: chipDecoration.labelStyle,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            softWrap: false,
           ),
           const SizedBox(width: 4),
           InkWell(
@@ -706,13 +709,8 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
                 (element) => element.label == option.label,
               );
             },
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child:
-                  chipDecoration.deleteIcon ??
-                  const Icon(Icons.close, size: 16),
-            ),
+            child:
+                chipDecoration.deleteIcon ?? const Icon(Icons.close, size: 13),
           ),
         ],
       ),

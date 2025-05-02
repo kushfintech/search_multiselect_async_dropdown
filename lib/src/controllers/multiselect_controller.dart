@@ -2,84 +2,126 @@ part of '../multi_dropdown.dart';
 
 /// Controller for the multiselect dropdown.
 class MultiSelectController<T> extends ChangeNotifier {
-  /// a flag to indicate whether the controller is initialized.
   bool _initialized = false;
-
-  /// set initialized flag to true.
-  void _initialize() {
-    _initialized = true;
-  }
-
-  List<DropdownItem<T>> _items = [];
-
-  List<DropdownItem<T>> _filteredItems = [];
-
+  bool _open = false;
+  bool _isDisposed = false;
   String _searchQuery = '';
 
-  /// Gets the list of dropdown items.
-  // List<DropdownItem<T>> get items =>
-  //     _searchQuery.isEmpty ? _items : _filteredItems;
+  List<DropdownItem<T>> _allList = [];
+  List<DropdownItem<T>> _items = [];
+  List<DropdownItem<T>> _filteredItems = [];
+
+  OnSelectionChanged<T>? _onSelectionChanged;
+  OnSearchChanged? _onSearchChanged;
 
   List<DropdownItem<T>> get items =>
       _searchQuery.isEmpty ? _items : _filteredItems;
 
-  /// Gets the list of selected dropdown items.
   List<DropdownItem<T>> get selectedItems =>
-      _items.where((element) => element.selected).toList();
+      _allList.where((item) => item.selected).toList();
 
-  /// Get the list of selected dropdown item values.
   List<T> get _selectedValues => selectedItems.map((e) => e.value).toList();
 
-  /// Gets the list of disabled dropdown items.
   List<DropdownItem<T>> get disabledItems =>
-      _items.where((element) => element.disabled).toList();
+      _allList.where((item) => item.disabled).toList();
 
-  bool _open = false;
-
-  /// Gets whether the dropdown is open.
   bool get isOpen => _open;
-
-  bool _isDisposed = false;
-
-  /// Gets whether the controller is disposed.
   bool get isDisposed => _isDisposed;
 
-  /// on selection changed callback invoker.
-  OnSelectionChanged<T>? _onSelectionChanged;
+  void _initialize() {
+    _initialized = true;
+  }
 
-  /// on search changed callback invoker.
-  OnSearchChanged? _onSearchChanged;
-
-  /// sets the list of dropdown items.
-  // /// It replaces the existing list of dropdown items.
-  void setItems(List<DropdownItem<T>> options) {
-    // Keep track of currently selected values
+  void setItems(List<DropdownItem<T>> newItems) {
+    // Preserve selection and disabled state from old list
+    // Collect the values of previously selected and disabled items from _allList.
     final selectedValues =
-        _items.where((e) => e.selected).map((e) => e.value).toSet();
+        _allList.where((e) => e.selected).map((e) => e.value).toSet();
+    final disabledValues =
+        _allList.where((e) => e.disabled).map((e) => e.value).toSet();
 
-    // If first time (_items empty), just load the full list
-    if (_items.isEmpty) {
-      _items =
-          options.map((item) {
-            final isSelected = selectedValues.contains(item.value);
-            return item.copyWith(selected: isSelected);
-          }).toList();
-    } else {
-      // Don't grow the list — just update selection of existing items
-      _items =
-          _items.map((item) {
-            final isSelected =
-                selectedValues.contains(item.value) ||
-                options.any((o) => o.value == item.value && o.selected);
-            return item.copyWith(selected: isSelected);
-          }).toList();
+    //  Map old items by value for lookup
+    //Create a map from value to item for fast access later (helps find missing selected items).
+    // This is useful for ensuring that selected items that are not in the new list
+    final Map<T, DropdownItem<T>> existingMap = {
+      for (var item in _allList) item.value: item,
+    };
+
+    // Update _allList using new items
+    //Replace _allList with a new list based on newItems.
+    //Keep selected and disabled flags if the item's value is in selectedValues or disabledValues.
+
+    _allList =
+        newItems.map((newItem) {
+          return newItem.copyWith(
+            selected: selectedValues.contains(newItem.value),
+            disabled: disabledValues.contains(newItem.value),
+          );
+        }).toList();
+
+    //Sort list with selected items first
+    //Update _items to a version of _allList with selected items sorted first.
+    _items = _sortSelectedFirst(_allList);
+
+    // Filter list based on search query
+    //If there's no search query, _filteredItems is the same as _items.
+    //If there is a query, it filters and sorts _allList based on the query.
+    _filteredItems =
+        _searchQuery.isEmpty
+            ? _sortSelectedFirst(_items)
+            : _sortSelectedFirst(
+              _allList
+                  .where(
+                    (item) => item.label.toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ),
+                  )
+                  .toList(),
+            );
+
+    // Ensure selected items not in newItems stay in the list
+    //Add back any selected items that were not in newItems
+    //If a previously selected item was not included in newItems, add it back to _allList to preserve its selection.
+    final selectedMissingItems =
+        existingMap.entries
+            .where(
+              (entry) =>
+                  selectedValues.contains(entry.key) &&
+                  !_allList.any((i) => i.value == entry.key),
+            )
+            .map((entry) => entry.value.copyWith(selected: true))
+            .toList();
+
+    _allList.addAll(selectedMissingItems);
+    _items = _sortSelectedFirst(_allList);
+
+    //Update filtered items with missing selected items if search is active
+    //If search is active, ensure those "missing but selected" items also appear in the filtered list.
+    if (_searchQuery.isNotEmpty) {
+      _filteredItems.addAll(
+        selectedMissingItems.where((item) => !_filteredItems.contains(item)),
+      );
     }
 
-    // Refresh the filtered list for search results
+    notifyListeners();
+    _onSelectionChanged?.call(_selectedValues);
+  }
+
+  void clearAll() {
+    // Reset selections in _allList
+    _allList =
+        _allList
+            .map(
+              (item) => item.selected ? item.copyWith(selected: false) : item,
+            )
+            .toList();
+
+    // Ensure that _items and _filteredItems are updated accordingly
+    _items = _sortSelectedFirst(_allList);
     _filteredItems =
         _searchQuery.isEmpty
             ? List.from(_items)
-            : _items
+            : _allList
                 .where(
                   (item) => item.label.toLowerCase().contains(
                     _searchQuery.toLowerCase(),
@@ -91,133 +133,46 @@ class MultiSelectController<T> extends ChangeNotifier {
     _onSelectionChanged?.call(_selectedValues);
   }
 
-  // void setItems(List<DropdownItem<T>> options) {
-  //   _items
-  //  ..clear();
-  //  ..addAll(options);
-  //   notifyListeners();
-  //   _onSelectionChanged?.call(_selectedValues);
-  // }
-
-  /// Adds a dropdown item to the list of dropdown items.
-  /// The [index] parameter is optional, and if provided, the item will be inserted at the specified index.
-  void addItem(DropdownItem<T> option, {int index = -1}) {
-    if (index == -1) {
-      _items.add(option);
-    } else {
-      _items.insert(index, option);
-    }
-    notifyListeners();
-    _onSelectionChanged?.call(_selectedValues);
-  }
-
-  /// Adds a list of dropdown items to the list of dropdown items.
-  void addItems(List<DropdownItem<T>> options) {
-    _items.addAll(options);
-    notifyListeners();
-    _onSelectionChanged?.call(_selectedValues);
-  }
-
-  /// clears all the selected items.
-  void clearAll() {
-    _items =
-        _items
-            .map(
-              (element) =>
-                  element.selected
-                      ? element.copyWith(selected: false)
-                      : element,
-            )
-            .toList();
-    notifyListeners();
-    _onSelectionChanged?.call(_selectedValues);
-  }
-
-  /// selects all the items.
   void selectAll() {
-    _items =
-        _items
+    _allList =
+        _allList
             .map(
-              (element) =>
-                  !element.selected
-                      ? element.copyWith(selected: true)
-                      : element,
+              (item) =>
+                  item.disabled || item.selected
+                      ? item
+                      : item.copyWith(selected: true),
             )
             .toList();
+    _items = _sortSelectedFirst(_allList);
+    _filteredItems = List.from(_items);
     notifyListeners();
     _onSelectionChanged?.call(_selectedValues);
   }
 
-  /// select the item at the specified index.
-  ///
-  /// The [index] parameter is the index of the item to select.
   void selectAtIndex(int index) {
-    if (index < 0 || index >= _items.length) return;
-
-    final item = _items[index];
-
+    if (index < 0 || index >= items.length) return;
+    final item = items[index];
     if (item.disabled || item.selected) return;
-
-    selectWhere((element) => element == _items[index]);
+    toggleWhere((element) => element.value == item.value);
   }
 
-  /// deselects all the items.
-  void toggleWhere(bool Function(DropdownItem<T> item) predicate) {
-    _items =
-        _items
-            .map(
-              (element) =>
-                  predicate(element)
-                      ? element.copyWith(selected: !element.selected)
-                      : element,
-            )
-            .toList();
-
-    if (_searchQuery.isNotEmpty) {
-      _filteredItems =
-          _filteredItems
-              .map(
-                (element) =>
-                    predicate(element)
-                        ? element.copyWith(selected: !element.selected)
-                        : element,
-              )
-              .toList();
-    }
-
+  void toggleWhere(bool Function(DropdownItem<T>) predicate) {
+    _allList =
+        _allList.map((item) {
+          if (predicate(item)) {
+            return item.copyWith(selected: !item.selected);
+          }
+          return item;
+        }).toList();
+    _items = _sortSelectedFirst(_allList);
+    _updateFilteredItems();
     notifyListeners();
     _onSelectionChanged?.call(_selectedValues);
   }
-  // void toggleWhere(bool Function(DropdownItem<T> item) predicate) {
-  //   _items =
-  //       _items
-  //           .map(
-  //             (element) =>
-  //                 predicate(element)
-  //                     ? element.copyWith(selected: !element.selected)
-  //                     : element,
-  //           )
-  //           .toList();
-  //   if (_searchQuery.isNotEmpty) {
-  //     _filteredItems =
-  //         _items
-  //             .where(
-  //               (item) => item.label.toLowerCase().contains(
-  //                 _searchQuery.toLowerCase(),
-  //               ),
-  //             )
-  //             .toList();
-  //   }
-  //   notifyListeners();
-  //   _onSelectionChanged?.call(_selectedValues);
-  // }
 
-  /// selects the items that satisfy the predicate.
-  ///
-  /// The [predicate] parameter is a function that takes a [DropdownItem] and returns a boolean.
   void selectWhere(bool Function(DropdownItem<T> item) predicate) {
-    _items =
-        _items
+    _allList =
+        _allList
             .map(
               (element) =>
                   predicate(element) && !element.selected
@@ -225,13 +180,15 @@ class MultiSelectController<T> extends ChangeNotifier {
                       : element,
             )
             .toList();
+    _items = _sortSelectedFirst(_allList);
+    _updateFilteredItems();
     notifyListeners();
     _onSelectionChanged?.call(_selectedValues);
   }
 
   void _toggleOnly(DropdownItem<T> item) {
-    _items =
-        _items
+    _allList =
+        _allList
             .map(
               (element) =>
                   element == item
@@ -239,132 +196,95 @@ class MultiSelectController<T> extends ChangeNotifier {
                       : element.copyWith(selected: false),
             )
             .toList();
-
+    _items = _sortSelectedFirst(_allList);
+    _updateFilteredItems();
     notifyListeners();
     _onSelectionChanged?.call(_selectedValues);
   }
 
-  /// unselects the items that satisfy the predicate.
-  ///
-  /// The [predicate] parameter is a function that takes a [DropdownItem] and returns a boolean.
-  void unselectWhere(bool Function(DropdownItem<T> item) predicate) {
-    _items =
-        _items
-            .map(
-              (element) =>
-                  predicate(element) && element.selected
-                      ? element.copyWith(selected: false)
-                      : element,
-            )
-            .toList();
+  void unselectWhere(bool Function(DropdownItem<T>) predicate) {
+    _allList =
+        _allList.map((item) {
+          if (predicate(item) && item.selected) {
+            return item.copyWith(selected: false);
+          }
+          return item;
+        }).toList();
+    _items = _sortSelectedFirst(_allList);
+    _updateFilteredItems();
     notifyListeners();
     _onSelectionChanged?.call(_selectedValues);
   }
 
-  /// disables the items that satisfy the predicate.
-  ///
-  /// The [predicate] parameter is a function that takes a [DropdownItem] and returns a boolean.
-  void disableWhere(bool Function(DropdownItem<T> item) predicate) {
-    _items =
-        _items
-            .map(
-              (element) =>
-                  predicate(element) && !element.disabled
-                      ? element.copyWith(disabled: true)
-                      : element,
-            )
-            .toList();
+  void disableWhere(bool Function(DropdownItem<T>) predicate) {
+    _allList =
+        _allList.map((item) {
+          if (predicate(item) && !item.disabled) {
+            return item.copyWith(disabled: true);
+          }
+          return item;
+        }).toList();
+    _items = _sortSelectedFirst(_allList);
+    _updateFilteredItems();
     notifyListeners();
     _onSelectionChanged?.call(_selectedValues);
   }
 
-  /// shows the dropdown, if it is not already open.
   void openDropdown() {
     if (_open) return;
-
     _open = true;
     notifyListeners();
   }
 
-  /// hides the dropdown, if it is not already closed.
   void closeDropdown() {
     if (!_open) return;
-
     _open = false;
     notifyListeners();
   }
 
-  // ignore: use_setters_to_change_properties
   void _setOnSelectionChange(OnSelectionChanged<T>? onSelectionChanged) {
-    this._onSelectionChanged = onSelectionChanged;
+    _onSelectionChanged = onSelectionChanged;
   }
 
-  // ignore: use_setters_to_change_properties
   void _setOnSearchChange(OnSearchChanged? onSearchChanged) {
-    this._onSearchChanged = onSearchChanged;
+    _onSearchChanged = onSearchChanged;
   }
-
-  // sets the search query.
-  // The [query] parameter is the search query.
 
   void _setSearchQuery(String query) {
     _searchQuery = query;
-
-    _filteredItems =
-        _searchQuery.isEmpty
-            ? List.from(_items) // Important: Show full list if nothing searched
-            : _items
-                .where(
-                  (item) => item.label.toLowerCase().contains(
-                    _searchQuery.toLowerCase(),
-                  ),
-                )
-                .toList();
-
+    _updateFilteredItems();
     _onSearchChanged?.call(query);
     notifyListeners();
   }
 
-  // void _setSearchQuery(String query) {
-  //   _searchQuery = query;
-  //   if (_searchQuery.isEmpty) {
-  //     _filteredItems = List.from(
-  //       _items,
-  //     ); // Maintain the same items with their selection states
-  //   } else {
-  //     _filteredItems =
-  //         _items
-  //             .where(
-  //               (item) => item.label.toLowerCase().contains(
-  //                 _searchQuery.toLowerCase(),
-  //               ),
-  //             )
-  //             .toList();
-  //   }
-  //   _onSearchChanged?.call(query);
-  //   notifyListeners();
-  // }
-  // void _setSearchQuery(String query) {
-  //   _searchQuery = query;
-  //   if (_searchQuery.isEmpty) {
-  //     _filteredItems = List.from(_items);
-  //   } else {
-  //     _filteredItems =
-  //         _items
-  //             .where(
-  //               (item) => item.label.toLowerCase().contains(
-  //                 _searchQuery.toLowerCase(),
-  //               ),
-  //             )
-  //             .toList();
-  //   }
-  //   _onSearchChanged?.call(query);
-  //   notifyListeners();
-  // }
+  void _updateFilteredItems() {
+    if (_searchQuery.isEmpty) {
+      _filteredItems = _sortSelectedFirst(_items);
+    } else {
+      final matchingItems =
+          _allList.where((item) {
+            final matchesQuery = item.label.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            );
 
-  // clears the search query.
+            return matchesQuery || item.selected; // Always include selected
+          }).toList();
+
+      _filteredItems = matchingItems;
+
+      // _filteredItems = _sortSelectedFirst(matchingItems);
+    }
+  }
+
+  List<DropdownItem<T>> _sortSelectedFirst(List<DropdownItem<T>> items) {
+    final selected = items.where((item) => item.selected).toList();
+    final unselected = items.where((item) => !item.selected).toList();
+    return [...selected, ...unselected];
+  }
+
   void _clearSearchQuery({bool notify = false}) {
     _searchQuery = '';
+    _updateFilteredItems();
     if (notify) notifyListeners();
   }
 
@@ -377,13 +297,12 @@ class MultiSelectController<T> extends ChangeNotifier {
 
   @override
   String toString() {
-    return 'MultiSelectController(options: $_items, open: $_open)';
+    return 'MultiSelectController(items: $_items, open: $_open)';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-
     return other is MultiSelectController<T> &&
         listEquals(other._items, _items) &&
         other._open == _open;
