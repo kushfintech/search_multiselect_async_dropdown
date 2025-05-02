@@ -695,13 +695,12 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Text(
-              option.label,
-              style: chipDecoration.labelStyle,
-
-              overflow: TextOverflow.clip,
-            ),
+          Text(
+            option.label,
+            style: chipDecoration.labelStyle,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            softWrap: false,
           ),
           const SizedBox(width: 4),
           InkWell(
@@ -710,13 +709,8 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
                 (element) => element.label == option.label,
               );
             },
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child:
-                  chipDecoration.deleteIcon ??
-                  const Icon(Icons.close, size: 16),
-            ),
+            child:
+                chipDecoration.deleteIcon ?? const Icon(Icons.close, size: 13),
           ),
         ],
       ),
