@@ -245,14 +245,17 @@ class MultiSelectController<T> extends ChangeNotifier {
       _filteredItems = _sortSelectedFirst(_items);
     } else {
       final matchingItems =
-          _allList
-              .where(
-                (item) => item.label.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ),
-              )
-              .toList();
-      _filteredItems = _sortSelectedFirst(matchingItems);
+          _allList.where((item) {
+            final matchesQuery = item.label.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            );
+
+            return matchesQuery || item.selected; // Always include selected
+          }).toList();
+
+      _filteredItems = matchingItems;
+
+      // _filteredItems = _sortSelectedFirst(matchingItems);
     }
   }
 
