@@ -277,7 +277,8 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
       // 🔥 Only fetch data if the search query has changed
       if (widget.searchEnabled &&
           _dropdownController._searchQuery != _lastSearchQuery &&
-          _dropdownController.isOpen) {
+          _dropdownController.isOpen &&
+          widget.future != null) {
         _lastSearchQuery = _dropdownController._searchQuery;
 
         if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -302,8 +303,9 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
     if (_dropdownController.isDisposed) {
       throw StateError('DropdownController is disposed');
     }
-
-    unawaited(_handleFuture(_dropdownController._searchQuery));
+    if (widget.future != null) {
+      unawaited(_handleFuture(_dropdownController._searchQuery));
+    }
 
     if (!_dropdownController._initialized) {
       _dropdownController
@@ -353,6 +355,7 @@ class _MultiDropdownState<T extends Object> extends State<MultiDropdown<T>> {
   Future<void> _handleFuture(String query) async {
     // we need to wait for the future to complete
     // before we can set the items to the dropdown controller.
+    if (widget.future == null) return;
 
     try {
       _loadingController.start();
